@@ -18,11 +18,6 @@ class Schedule(TimeStampedModel):
         default=True,
         help_text=_('Indicates if this schedule is actively used')
     )
-    # TODO Delete this field during last stage of rolling out field renames
-    start = models.DateTimeField(
-        db_index=True,
-        help_text=_('Date this schedule went into effect')
-    )
     start_date = models.DateTimeField(
         db_index=True,
         help_text=_('Date this schedule went into effect')
