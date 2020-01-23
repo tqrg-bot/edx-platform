@@ -307,6 +307,22 @@ class SingleTextbookTab(CourseTab):
         raise NotImplementedError('SingleTextbookTab should not be serialized.')
 
 
+class DatesTab(CourseTab):
+    """
+    A tab representing the relevant dates for a course.
+    """
+    type = "dates"
+    title = ugettext_noop(
+        "Dates")  # We don't have the user in this context, so we don't want to translate it at this level.
+    view_name = "dates"
+    is_default = True
+
+    @classmethod
+    def is_enabled(cls, course, user=None):
+        """Returns true if this tab is enabled."""
+        return True
+
+
 def get_course_tab_list(request, course):
     """
     Retrieves the course tab list from xmodule.tabs and manipulates the set as necessary
@@ -320,6 +336,7 @@ def get_course_tab_list(request, course):
     course_tab_list = []
     must_complete_ee = not user_can_skip_entrance_exam(user, course)
     for tab in xmodule_tab_list:
+        print('Tab: {}'.format(tab))
         if must_complete_ee:
             # Hide all of the tabs except for 'Courseware'
             # Rename 'Courseware' tab to 'Entrance Exam'

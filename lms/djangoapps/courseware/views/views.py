@@ -56,6 +56,7 @@ from lms.djangoapps.courseware.courses import (
     can_self_enroll_in_course,
     course_open_for_self_enrollment,
     get_course,
+    get_course_date_blocks,
     get_course_overview_with_access,
     get_course_with_access,
     get_courses,
@@ -1013,6 +1014,28 @@ def program_marketing(request, program_uuid):
     context['uses_bootstrap'] = True
 
     return render_to_response('courseware/program_marketing.html', context)
+
+
+@ensure_csrf_cookie
+@ensure_valid_course_key
+def dates(request, course_id):
+    """
+    Display the course's syllabus.html, or 404 if there is no such course.
+    Assumes the course_id is in a valid format.
+    """
+
+    course_key = CourseKey.from_string(course_id)
+    course = get_course_with_access(request.user, 'load', course_key, check_if_enrolled=False)
+    course_date_blocks = get_course_date_blocks(course, request.user)
+    for block in course_date_blocks:
+        print('Block: {}'.format(block))
+
+    context = {
+        'course': course,
+        'course_date_blocks': [block for block in course_date_blocks if block.title != 'current_datetime']
+    }
+
+    return render_to_response('courseware/dates.html', context)
 
 
 @transaction.non_atomic_requests
