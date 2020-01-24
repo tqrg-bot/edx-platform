@@ -5,6 +5,7 @@ SERVER_NAME and SERVER_PORT.
 """
 from django.utils.deprecation import MiddlewareMixin
 
+
 class XForwardedForMiddleware(MiddlewareMixin):
     """
     Gunicorn 19.0 has breaking changes for REMOTE_ADDR, SERVER_* headers
