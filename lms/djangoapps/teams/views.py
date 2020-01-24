@@ -1360,11 +1360,9 @@ class MembershipDetailView(ExpandableFieldViewMixin, GenericAPIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class MembershipBulkManagementView(View):
+class MembershipBulkManagementView(ExpandableFieldViewMixin, GenericAPIView):
     """
-    Partially-implemented view for uploading and downloading team membership CSVs.
-
-    TODO MST-31
+    View for uploading and downloading team membership CSVs.
     """
     def get(self, request, **_kwargs):
         """
@@ -1385,11 +1383,17 @@ class MembershipBulkManagementView(View):
         """
         self.check_access()
         inputfile_handle = request.FILES['csv']
-        team_import_manager = TeamMemberShipImportManager
-        import pdb;pdb.set_trace()
+        team_import_manager = TeamMemberShipImportManager()
         team_import_manager.set_team_membership_from_csv(self.course, inputfile_handle)
-
-        return HttpResponse(status=status.HTTP_501_NOT_IMPLEMENTED)
+        import pdb;pdb.set_trace()
+        if team_import_manager.import_succeeded == True:
+            return Response(status=status.HTTP_201_CREATED)
+        else:
+            return Response (
+                build_api_error(':'.join([e for e in team_import_manager.error_list])), #build_api_error(ugettext_noop("error on import")),#team_import_manager.error_list,
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        #return HttpResponse(status=status.HTTP_501_NOT_IMPLEMENTED)
 
     def check_access(self):
         """
