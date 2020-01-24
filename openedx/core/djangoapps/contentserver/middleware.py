@@ -38,7 +38,6 @@ except ImportError:
     newrelic = None  # pylint: disable=invalid-name
 
 
-
 # TODO: Soon as we have a reasonable way to serialize/deserialize AssetKeys, we need
 # to change this file so instead of using course_id_partial, we're just using asset keys
 
