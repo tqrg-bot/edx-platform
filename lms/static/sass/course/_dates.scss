@@ -1,77 +1,67 @@
-.dates-wrapper {
-    @extend .content
-}
+.date-wrapper {
+    @extend .content;
 
-.dates-title {
-    margin-bottom: ($baseline*0.75);
-    padding-bottom: 0;
-    border-bottom: 0;
-}
-
-.border-left {
-    @include border-left(3px solid $blue);
-}
-
-.date-timeline > p {
-    // Reset spacing
-    margin-bottom: 0;
-}
-
-.timeline-date {
-    @include font-size(16);
-    margin-bottom: .5em;
-    font-weight: bold;
-}
-
-.timeline-title {
-    font-weight: bold;
-}
-
-.date-timeline > li {
-    @include font-size(14);
-    position: relative;
-    margin-bottom: 0;
-    padding-bottom: 2.5em;
-    list-style: none;
-    color: $darkGrey;
-
-    &:before {
-        content: url('#{$static-path}/images/dates-disk-dark-grey.svg');
-        position: absolute;
-        left: -22px;
-        top: 0;
+    .date-title {
+        margin-bottom: ($baseline*0.75);
+        padding-bottom: 0;
+        border-bottom: 0;
     }
 
-    &:active, &:before {
-        color: $black;
-        content: url('#{$static-path}/images/dates-disk-black.svg');
-        left: -24px;
-    }
 
-    &:after {
-        content:"";
-        position: absolute;
-        left: -19px;
-        border-left: 1px solid $darkGrey;
-        height: 100%;
-        width: 1px;
-        top: 0;
-    }
-    &.active {
-        border-left: 1px solid $black;
-    }
+    .timeline-item {
+        border-left: solid 1px $darkGrey;
+        color: $darkGrey;
+        position: relative;
+        padding-left: 1em;
+        padding-bottom: .5em;
 
-    &:first-child:after {
-        top: 10px;
         &.active {
-            top: 8px;
+            color: $black;
+            border-left: solid 1px $black;
+        }
+
+        &:last-of-type {
+            border-left: none;
         }
     }
 
-    &:last-child:after {
-        height: 10px;
+    .date-circle {
+        width: 7px;
+        height: 7px;
+        position: absolute;
+        left: -4px;
+        background-color: $darkGrey;
+        border-radius: 50%;
+
         &.active {
-            top: 8px;
+            width: 11px;
+            height: 11px;
+            left: -6px;
+            background-color: $black;
         }
+    }
+
+    .date-content {
+        display: flex;
+        flex-wrap: wrap;
+        div {
+            flex: 100% 0;
+        }
+    }
+
+    .timeline-date {
+        @include font-size(16);
+        font-weight: bold;
+        margin-bottom: .25em;
+    }
+
+    .timeline-title {
+        @include font-size(14);
+        font-weight: bold;
+    }
+
+    .timeline-description {
+        @include font-size(12);
+        margin-bottom: .5em;
     }
 }

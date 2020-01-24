@@ -18,81 +18,28 @@ from django.utils.translation import ugettext as _
 
 <main id="main" aria-label="Content" tabindex="-1">
     <div class="container">
-        <div class="dates-wrapper">
+        <div class="date-wrapper">
             <section class="course-info" id="course-info-dates">
-                <h2 class="hd hd-2 dates-title">
+                <h2 class="hd hd-2 date-title">
                     ${_("Important Dates")}
                 </h2>
-<!--                %for block in course_date_blocks:-->
-                        <ul class="date-timeline">
-                            <li>
-                                <div>
-                                    <div class="timeline-date">
-                                        Mon, Aug 30, 2020
-                                    </div>
-                                    <div class="timeline-title">
-                                        Lorem Ipsum
-                                    </div>
-                                    <div class="">
-                                        Sed ut perspiciatis, unde omnis iste natus error sit voluptatem accusantium doloremque.
-                                    </div>
-                                </div>
-                            </li>
-                            <li>
-                                <div>
-                                    <div class="timeline-date">
-                                        Mon, Aug 30, 2020
-                                    </div>
-                                    <div class="timeline-title">
-                                        Lorem Ipsum
-                                    </div>
-                                    <div class="">
-                                        Sed ut perspiciatis, unde omnis iste natus error sit voluptatem accusantium doloremque.
-                                    </div>
-                                </div>
-                            </li>
-                            <li class="active">
-                                <div>
-                                    <div class="timeline-date">
-                                        Mon, Aug 30, 2020
-                                    </div>
-                                    <div class="timeline-title">
-                                        Lorem Ipsum
-                                    </div>
-                                    <div class="">
-                                        Sed ut perspiciatis, unde omnis iste natus error sit voluptatem accusantium doloremque.
-                                    </div>
-                                </div>
-                            </li>
-                            <li>
-                                <div>
-                                    <div class="timeline-date">
-                                        Mon, Aug 30, 2020
-                                    </div>
-                                    <div class="timeline-title">
-                                        Lorem Ipsum
-                                    </div>
-                                    <div class="">
-                                        Sed ut perspiciatis, unde omnis iste natus error sit voluptatem accusantium doloremque.
-                                    </div>
-                                </div>
-                            </li>
-                            <li>
-                                <div>
-                                    <div class="timeline-date">
-                                        Mon, Aug 30, 2020
-                                    </div>
-                                    <div class="timeline-title">
-                                        Lorem Ipsum
-                                    </div>
-                                    <div class="">
-                                        Sed ut perspiciatis, unde omnis iste natus error sit voluptatem accusantium doloremque.
-                                    </div>
-                                </div>
-                            </li>
-
-                        </ul>
-<!--                %endfor-->
+                % for block in course_date_blocks:
+                    <% active='active'if block.date.strftime(block.date_format) == block.current_time.strftime(block.date_format) else '' %>
+                    <div class="timeline-item ${active}">
+                        <div class="date-circle ${active}"></div>
+                        <div class="date-content">
+                            <div class="timeline-date ">
+                                ${block.date.strftime(block.date_format)}
+                            </div>
+                            <div class="timeline-title ">
+                                ${block.title}
+                            </div>
+                            <div class="timeline-description">
+                                ${block.description}
+                            </div>
+                        </div>
+                    </div>
+                % endfor
             </section>
         </div>
     </div>
