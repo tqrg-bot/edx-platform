@@ -177,6 +177,9 @@ class CourseEntitlement(TimeStampedModel):
 
     history = HistoricalRecords()
 
+    class Meta:
+        unique_together = ('course_uuid', 'order_number')
+
     @property
     def expired_at_datetime(self):
         """
