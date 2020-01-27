@@ -2,16 +2,15 @@
 CSV processing and generation utilities for Teams LMS app.
 """
 
-
-
-import logging
 import csv
-from lms.djangoapps.teams.models import CourseTeam, CourseTeamMembership
-from student.models import CourseAccessRole, CourseEnrollment
 from django.contrib.auth.models import User
+from student.models import CourseEnrollment
 from xmodule.modulestore.django import modulestore
+
+from lms.djangoapps.teams.models import CourseTeam
+from .errors import AlreadyOnTeamInCourse, NotEnrolledInCourseForTeam
 from .utils import emit_team_event
-from .errors import AlreadyOnTeamInCourse, ElasticSearchConnectionError, NotEnrolledInCourseForTeam
+
 
 def load_team_membership_csv(course, response):
     """
@@ -30,7 +29,12 @@ def load_team_membership_csv(course, response):
     )
     response.write(not_implemented_message + "\n")
 
+
 class TeamMemberShipImportManager(object):
+    """
+    A manager class that is responsible the import process of csv file including validation and creation of
+    team_courseteam and teams_courseteammembership objects.
+    """
 
     def __init__(self):
         # the list of validation errors
@@ -65,17 +69,16 @@ class TeamMemberShipImportManager(object):
         self.error_list = []
         self.teamset_names_list = []
         self.teamset_membership_dictionary = {}
-        course_key = course.id
-        self.course_module =  modulestore().get_course(course.id)
+        self.course_module = modulestore().get_course(course.id)
         all_rows = [row for row in csv.reader(input_file.read().decode('utf-8').splitlines())]
         header_row = all_rows[0]
         if self.validate_teamsets(header_row):
             # process student rows:
-            for i in range(1,len(all_rows)):
+            for i in range(1, len(all_rows)):
                 row_data = all_rows[i]
-                if row_data[0]: # avoid processing rows with empty user names (excel copy and paste)
+                if row_data[0]:  # avoid processing rows with empty user names (excel copy and paste)
                     self.reset_user(row_data[0])
-                    if self.validate_user_entry(row_data, course) == False:
+                    if self.validate_user_entry(course) is False:
                         return False
                     self.add_user_to_team(row_data, course)
 
@@ -92,16 +95,16 @@ class TeamMemberShipImportManager(object):
         where teamset_X_name must be a valid name of an existing teamset.
         """
         for i in range(2, len(header_row)):
-            team_config=self.course_module.teams_configuration
+            team_config = self.course_module.teams_configuration
             if not header_row[i] in [ts.teamset_id for ts in team_config.teamsets]:
                 self.error_list.append("Teamset named " + header_row[i] + " does not exist.")
                 return False
             self.teamset_names_list.append(header_row[i])
-            self.teamset_membership_dictionary[header_row[i]]=[]
-            self.teamset_index_dictionary[i]=header_row[i]
+            self.teamset_membership_dictionary[header_row[i]] = []
+            self.teamset_index_dictionary[i] = header_row[i]
         return True
 
-    def validate_user_entry(self, user_row, course):
+    def validate_user_entry(self, course):
         """
         Validates user row entry. Returns true if there are no errors.
         user_row is the list representation of an input row. It will have the following formta:
@@ -133,26 +136,25 @@ class TeamMemberShipImportManager(object):
                     # teamsets
                     team = CourseTeam.objects.get(name=team_name, topic_id=self.teamset_index_dictionary[i])
                 except CourseTeam.DoesNotExist:
-                    #course_module = modulestore().get_course(course.id)
-                    team = CourseTeam.create( name=team_name,course_id=course.id,description='Import from csv',
-                                                topic_id=self.teamset_index_dictionary[i]
-                                            )
+                    # course_module = modulestore().get_course(course.id)
+                    team = CourseTeam.create(name=team_name, course_id=course.id, description='Import from csv',
+                                             topic_id=self.teamset_index_dictionary[i]
+                                             )
                     team.save()
 
                 # if not has_team_api_access(request.user, team.course_id, access_username=username):
                 #     return Response(status=status.HTTP_404_NOT_FOUND)
 
-                #if not has_specific_team_access(request.user, team):
+                # if not has_specific_team_access(request.user, team):
                 #    return Response(status=status.HTTP_403_FORBIDDEN)
 
                 # course_module = modulestore().get_course(course.id)
                 # This should use `calc_max_team_size` instead of `default_max_team_size` (TODO MST-32).
                 max_team_size = self.course_module.teams_configuration.default_max_team_size
                 if max_team_size is not None and team.users.count() >= max_team_size:
-                    error_list.append('Team ' + team_id + ' is already full.')
-                    break;
+                    self.error_list.append('Team ' + team.team_id + ' is already full.')
+                    break
                 try:
-                    membership = team.add_user(self.user)
                     emit_team_event(
                         'edx.team.learner_added',
                         team.course_id,
@@ -162,18 +164,15 @@ class TeamMemberShipImportManager(object):
                             'add_method': 'added_by_another_user'
                         }
                     )
-                    self.number_of_record_added+=1
+                    self.number_of_record_added += 1
                 except AlreadyOnTeamInCourse:
-                    self.error_list.append('The user ' + self.user.username + ' is already a member of a team in this course.')
+                    self.error_list.append(
+                        'The user ' + self.user.username + ' is already a member of a team in this course.')
                     break
                 except NotEnrolledInCourseForTeam:
-                    self.error_list.append('The user ' + self.user.username + 'is not enrolled in the course associated with this team.')
+                    self.error_list.append(
+                        'The user ' + self.user.username + 'is not enrolled in the course associated with this team.')
                     break
-                except:
-                    # TODO - REMOVE this block
-                    self.error_list.append('Unexpected error')
-                    break
-
 
     def reset_user(self, user_name):
         """
@@ -188,21 +187,3 @@ class TeamMemberShipImportManager(object):
         except User.DoesNotExist:
             # TODO - handle user key case
             self.error_list.append('User with username ' + user_name + ' does not exist')
-            #return Response(status=status.HTTP_404_NOT_FOUND)
-
-    def debug_get_hardcoded_team():
-        return CourseTeam.objects.get(team_id='Team 1')
-
-
-    def create_course_team(self, team_name, discussion_topic_id, course_id, topic_id):
-        team = CourseTeam.create(
-            name=team_name,
-            course_id=validated_data.get("course_id"),
-            # description=validated_data.get("description", ''),
-            topic_id=validated_data.get("topic_id", ''),
-            #country=validated_data.get("country", ''),
-            # language=validated_data.get("language", ''),
-            #organization_protected=validated_data.get("organization_protected", False)
-        )
-        team.save()
-
