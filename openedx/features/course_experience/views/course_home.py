@@ -28,7 +28,10 @@ from lms.djangoapps.courseware.views.views import CourseTabView
 from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
 from openedx.core.djangoapps.plugin_api.views import EdxFragmentView
 from openedx.core.djangoapps.util.maintenance_banner import add_maintenance_banner
-from openedx.features.course_duration_limits.access import generate_course_expired_fragment
+from openedx.features.course_duration_limits.access import (
+    generate_course_expired_message,
+    generate_fragment_from_message
+)
 from openedx.features.course_experience.course_tools import CourseToolsPluginManager
 from openedx.features.discounts.utils import get_first_purchase_offer_banner_fragment
 from openedx.features.discounts.utils import format_strikeout_price
@@ -121,7 +124,9 @@ class CourseHomeFragmentView(EdxFragmentView):
         course = get_course_with_access(request.user, 'load', course_key)
 
         # Render the course dates as a fragment
-        dates_fragment = CourseDatesFragmentView().render_to_fragment(request, course_id=course_id, **kwargs)
+        course_expiration_message = generate_course_expired_message(request.user, course)
+        dates_fragment = CourseDatesFragmentView().render_to_fragment(
+            request, course_id=course_id, FBE_message=course_expiration_message, **kwargs)
 
         # Render the full content to enrolled users, as well as to course and global staff.
         # Unenrolled users who are not course or global staff are given only a subset.
@@ -168,10 +173,8 @@ class CourseHomeFragmentView(EdxFragmentView):
                 request.user,
                 course_overview
             )
-            course_expiration_fragment = generate_course_expired_fragment(
-                request.user,
-                course_overview
-            )
+            if course_expiration_message:
+                course_expiration_fragment = generate_fragment_from_message(course_expiration_message)
         elif allow_public_outline or allow_public:
             outline_fragment = CourseOutlineFragmentView().render_to_fragment(
                 request, course_id=course_id, user_is_enrolled=False, **kwargs

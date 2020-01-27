@@ -355,7 +355,6 @@ class CourseAssignmentDate(DateSummary):
 
     @property
     def link_text(self):
-        """The text of the link."""
         return self.assignment_link_text
 
     @link_text.setter

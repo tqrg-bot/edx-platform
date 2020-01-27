@@ -20,14 +20,13 @@ class CourseDatesFragmentView(EdxFragmentView):
     """
     template_name = 'course_experience/course-dates-fragment.html'
 
-    def render_to_fragment(self, request, course_id=None, **kwargs):
+    def render_to_fragment(self, request, course_id=None, FBE_message=None, **kwargs):
         """
         Render the course dates fragment.
         """
         course_key = CourseKey.from_string(course_id)
         course = get_course_with_access(request.user, 'load', course_key, check_if_enrolled=False)
         course_date_blocks = get_course_date_blocks(course, request.user, request)
-        FBE_message = generate_course_expired_message(request.user, course)
 
         context = {
             'course_date_blocks': [block for block in course_date_blocks if block.title != 'current_datetime'],
