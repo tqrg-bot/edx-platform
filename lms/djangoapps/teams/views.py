@@ -1385,14 +1385,14 @@ class MembershipBulkManagementView(ExpandableFieldViewMixin, GenericAPIView):
         inputfile_handle = request.FILES['csv']
         team_import_manager = TeamMemberShipImportManager()
         team_import_manager.set_team_membership_from_csv(self.course, inputfile_handle)
-        if team_import_manager.import_succeeded == True:
-            return Response(team_import_manager.number_of_record_added.__str__(),status=status.HTTP_201_CREATED)
+        if team_import_manager.import_succeeded is True:
+            return Response(team_import_manager.number_of_record_added.__str__(), status=status.HTTP_201_CREATED)
         else:
-            return Response (
-                build_api_error(':'.join([e for e in team_import_manager.error_list])), #build_api_error(ugettext_noop("error on import")),#team_import_manager.error_list,
+            return Response(
+                build_api_error(':'.join([e for e in team_import_manager.error_list])),
                 status=status.HTTP_400_BAD_REQUEST
             )
-        #return HttpResponse(status=status.HTTP_501_NOT_IMPLEMENTED)
+
 
     def check_access(self):
         """
