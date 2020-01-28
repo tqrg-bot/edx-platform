@@ -252,21 +252,22 @@ class LoncapaProblem(object):
             if not answer and text:  # trigger of old->new conversion
                 additional.set('answer', text)
                 additional.text = ''
-
         for optioninput in tree.xpath('//optioninput'):
-            correct_option = None
+            correct_option = []
             child_options = []
             for option_element in optioninput.findall('./option'):
                 option_name = option_element.text.strip()
                 if option_element.get('correct').upper() == 'TRUE':
-                    correct_option = option_name
+                    correct_option.append(option_name)
                 child_options.append("'" + option_name + "'")
 
             if len(child_options) > 0:
                 options_string = '(' + ','.join(child_options) + ')'
                 optioninput.attrib.update({'options': options_string})
                 if correct_option:
-                    optioninput.attrib.update({'correct': correct_option})
+                    if len(correct_option) > 1:
+                        raise responsetypes.LoncapaProblemError("Multiple Correct values not allowed")
+                    optioninput.attrib.update({'correct': correct_option[0]})
 
     def do_reset(self):
         """
