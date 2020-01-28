@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 from student.models import CourseEnrollment
 from xmodule.modulestore.django import modulestore
 
-from lms.djangoapps.teams.models import CourseTeam
+from lms.djangoapps.teams.models import CourseTeam, CourseTeamMembership
 from .errors import AlreadyOnTeamInCourse, NotEnrolledInCourseForTeam
 from .utils import emit_team_event
 
@@ -50,6 +50,10 @@ class TeamMemberShipImportManager(object):
         self.number_of_record_added = 0
         # stores the course module that will be used to get course metadata
         self.course_module = ''
+        # stores the course for which we are populating teams
+        self.course = ''
+        self.max_erros = 0
+        self.max_erros_found = False
 
     @property
     def import_succeeded(self):
@@ -69,6 +73,7 @@ class TeamMemberShipImportManager(object):
         self.error_list = []
         self.teamset_names_list = []
         self.teamset_membership_dictionary = {}
+        self.course = course
         self.course_module = modulestore().get_course(course.id)
         all_rows = [row for row in csv.reader(input_file.read().decode('utf-8').splitlines())]
         header_row = all_rows[0]
@@ -77,12 +82,24 @@ class TeamMemberShipImportManager(object):
             for i in range(1, len(all_rows)):
                 row_data = all_rows[i]
                 if row_data[0]:  # avoid processing rows with empty user names (excel copy and paste)
-                    self.reset_user(row_data[0])
-                    if self.validate_user_entry(course) is False:
-                        return False
-                    self.add_user_to_team(row_data, course)
+                    user = self.reset_user(row_data[0])
+                    if user is None:
+                        continue
+                    if self.validate_user_entry(user, course) is False:
+                        row_data[0] = None
+                        continue
 
-            return True
+                    row_data[0] = user
+
+                    if self.validate_user_to_team(row_data, course) is False:
+                        return False
+
+            if len(self.error_list) == 0:
+                for i in range(1, len(all_rows)):
+                    self.add_user_to_team(all_rows[i], course)
+                return True
+            else:
+                return False
         return False
 
     def validate_teamsets(self, header_row):
@@ -100,12 +117,14 @@ class TeamMemberShipImportManager(object):
                 self.error_list.append("Teamset named " + header_row[i] + " does not exist.")
                 return False
             self.teamset_names_list.append(header_row[i])
-            self.teamset_membership_dictionary[header_row[i]] = []
+            self.teamset_membership_dictionary[i] = []
             self.teamset_index_dictionary[i] = header_row[i]
         return True
 
-    def validate_user_entry(self, course):
+    def validate_user_entry(self, user, course):
         """
+        Invalid states:
+            user not enrolled in course
         Validates user row entry. Returns true if there are no errors.
         user_row is the list representation of an input row. It will have the following formta:
         use_id, enrollment_mode, <Team_Name_1>,...,<Team_Name_n>
@@ -113,11 +132,64 @@ class TeamMemberShipImportManager(object):
         andrew,masters,team1,,team3
         joe,masters,,team2,team3
         """
-        if not CourseEnrollment.is_enrolled(self.user, course.id):
-            self.error_list.append('User ' + self.user.username + ' is not enrolled in this course.')
+        if not CourseEnrollment.is_enrolled(user, course.id):
+            self.error_list.append('User ' + user.username + ' is not enrolled in this course.')
             return False
 
         return True
+
+    def validate_user_to_team(self, user_row, course):
+        """
+        Validates a user entry relative to an existing team.
+        user_row is the list representation of an input row. It will have the following formta:
+        user_row[0] will contain an edX user object, followed by:
+        enrollment_mode, <Team_Name_1>,...,<Team_Name_n>
+        Team_Name_x are optional and can be a sparse list i.e:
+        [andrew],masters,team1,,team3
+        [joe],masters,,team2,team3
+        """
+        for i in range(2, len(user_row)):
+            user = user_row[0]
+            team_name = user_row[i]
+            if team_name:
+                try:
+                    # checks for a team inside a specific team set. This way team names can be duplicated across
+                    # teamsets
+                    team = CourseTeam.objects.get(name=team_name, topic_id=self.teamset_index_dictionary[i])
+                except CourseTeam.DoesNotExist:
+                    # if a team doesn't exists, the validation doesn't apply to it.
+                    import pdb;pdb.set_trace()
+                    if user.id in self.teamset_membership_dictionary[i]:
+                        if self.add_error_and_check_if_max_exceeded.append(
+                            'User ' + user.id + ' is already on a team set.'):
+                            return False
+                    else:
+                        self.teamset_membership_dictionary[i].append(user.id)
+                    continue
+                max_team_size = self.course_module.teams_configuration.default_max_team_size
+                if max_team_size is not None and team.users.count() >= max_team_size:
+                    if self.add_error_and_check_if_max_exceeded.append('Team ' + team.team_id + ' is already full.'):
+                        return False
+                if CourseTeamMembership.user_in_team_for_course( user, self.course.id, team.topic_id):
+                    if self.add_error_and_check_if_max_exceeded(
+                        'The user ' + self.user.username + ' is already a member of a team inside teamset '
+                        + team.topic_id + ' in this course.'
+                    ):
+                        return False
+
+    def add_error_and_check_if_max_exceeded(self, error_message):
+        """
+        Adds an error to the error collection.
+        :param error_message:
+        :return: True if maximum error threshold is exceeded and processing must stop
+                 False if maximum error threshold is NOT exceeded and processing can continue
+        """
+        self.error_list.append(error_message)
+        if count(self.error_list) >= self.max_erros:
+            self.max_erros_found = True
+            return True
+        else:
+            return False
 
     def add_user_to_team(self, user_row, course):
         """
@@ -128,6 +200,7 @@ class TeamMemberShipImportManager(object):
         andrew,masters,team1,,team3
         joe,masters,,team2,team3
         """
+        user = user_row[0]
         for i in range(2, len(user_row)):
             team_name = user_row[i]
             if team_name:
@@ -140,33 +213,22 @@ class TeamMemberShipImportManager(object):
                                              topic_id=self.teamset_index_dictionary[i]
                                              )
                     team.save()
-                # if not has_specific_team_access(request.user, team):
-                #    return Response(status=status.HTTP_403_FORBIDDEN)
-                # This should use `calc_max_team_size` instead of `default_max_team_size` (TODO MST-32).
-                max_team_size = self.course_module.teams_configuration.default_max_team_size
-                if max_team_size is not None and team.users.count() >= max_team_size:
-                    self.error_list.append('Team ' + team.team_id + ' is already full.')
-                    break
                 try:
-                    team.add_user(self.user)
+                    team.add_user(user)
                     emit_team_event(
                         'edx.team.learner_added',
                         team.course_id,
                         {
                             'team_id': team.team_id,
-                            'user_id': self.user.id,
+                            'user_id': user.id,
                             'add_method': 'added_by_another_user'
                         }
                     )
-                    self.number_of_record_added += 1
                 except AlreadyOnTeamInCourse:
-                    self.error_list.append(
-                        'The user ' + self.user.username + ' is already a member of a team in this course.')
-                    break
-                except NotEnrolledInCourseForTeam:
-                    self.error_list.append(
-                        'The user ' + self.user.username + 'is not enrolled in the course associated with this team.')
-                    break
+                    import pdb;pdb.set_trace()
+                    e = 'bad'
+                    throw
+                self.number_of_record_added += 1
 
     def reset_user(self, user_name):
         """
@@ -175,7 +237,11 @@ class TeamMemberShipImportManager(object):
         user_name: the user_name/email/user locator
         """
         try:
-            self.user = User.objects.get(username=user_name)
+            return User.objects.get(username=user_name)
         except User.DoesNotExist:
-            self.user = User.objects.get(email=user_name)
-            # TODO - handle user key case
+            try:
+                return User.objects.get(email=user_name)
+            except User.DoesNotExist:
+                self.error_list.append('Username or email ' + user_name + ' does not exist.')
+                return None
+                # TODO - handle user key case

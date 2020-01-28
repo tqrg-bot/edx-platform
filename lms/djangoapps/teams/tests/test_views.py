@@ -1748,3 +1748,11 @@ class TestBulkMembershipManagement(TeamAPITestCase):
         self.client.login(username=self.users['course_staff'].username, password=self.users['course_staff'].password)
         self.make_call(reverse('team_membership_bulk_management', args=[self.good_course_id]), 201, method='post',
                        data={'csv': csv_file}, user='staff')
+
+    def test_upload_non_existing_user(self):
+        csv_content = 'user,mode,topic_0' + '\n'
+        csv_content += 'missing_user, masters, team wind power'
+        csv_file = SimpleUploadedFile('test_file.csv', csv_content.encode('utf8'), content_type='text/csv')
+        self.client.login(username=self.users['course_staff'].username, password=self.users['course_staff'].password)
+        self.make_call(reverse('team_membership_bulk_management', args=[self.good_course_id]), 400, method='post',
+                       data={'csv': csv_file}, user='staff')
