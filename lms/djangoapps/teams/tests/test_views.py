@@ -1459,12 +1459,15 @@ class TestCreateMembershipAPI(EventTestMixin, TeamAPITestCase):
         self.assertIn('already a member', json.loads(response.content.decode('utf-8'))['developer_message'])
 
     def test_join_second_team_in_course(self):
-        response = self.post_create_membership(
-            400,
+        """
+        New behavior allows the same student to be enrolled in multiple teams, as long as they belong to different
+        topics (teamsets)
+        """
+        self.post_create_membership(
+            200,
             self.build_membership_data('student_enrolled_both_courses_other_team', self.solar_team),
             user='student_enrolled_both_courses_other_team'
         )
-        self.assertIn('already a member', json.loads(response.content.decode('utf-8'))['developer_message'])
 
     @ddt.data('staff', 'course_staff')
     def test_not_enrolled_in_team_course(self, user):
@@ -1680,10 +1683,7 @@ class TestBulkMembershipManagement(TeamAPITestCase):
         ('GET', good_course_id, deny_username, 403),
         ('GET', fake_course_id, allow_username, 404),
         ('GET', fake_course_id, deny_username, 404),
-        ('POST', good_course_id, allow_username, 501),  # TODO MST-31
         ('POST', good_course_id, deny_username, 403),
-        ('POST', fake_course_id, allow_username, 404),
-        ('POST', fake_course_id, deny_username, 404),
     )
     @ddt.unpack
     def test_error_statuses(self, method, course_id, username, expected_status):
@@ -1710,34 +1710,41 @@ class TestBulkMembershipManagement(TeamAPITestCase):
         # This strategy allows us to test with invalid course IDs
         return reverse('team_membership_bulk_management', args=[course_id])
 
-    @ddt.unpack
-    def test_upload_good_csv(self):
+    def test_upload_valid_csv_simple(self):
         self.create_and_enroll_student(username='a_user')
-        csv_content = 'user,mode,topic_0'+ '\n'
+        csv_content = 'user,mode,topic_0' + '\n'
         csv_content += 'a_user, masters, team wind power'
         csv_file = SimpleUploadedFile('test_file.csv', csv_content.encode('utf8'), content_type='text/csv')
         self.client.login(username=self.users['course_staff'].username, password=self.users['course_staff'].password)
-        self.make_call( reverse('team_membership_bulk_management', args=[self.good_course_id]), 201,method='post',data={'csv': csv_file},
-                        user='staff')
+        self.make_call(reverse('team_membership_bulk_management', args=[self.good_course_id]), 201, method='post',
+                       data={'csv': csv_file}, user='staff')
 
-    @ddt.unpack
-    def test_upload_wrong_teamset(self):
+    def test_upload_invalid_teamset(self):
         self.create_and_enroll_student(username='a_user')
         csv_content = 'user,mode,topic_0_bad' + '\n'
         csv_content += 'a_user, masters, team wind power'
         csv_file = SimpleUploadedFile('test_file.csv', csv_content.encode('utf8'), content_type='text/csv')
         self.client.login(username=self.users['course_staff'].username, password=self.users['course_staff'].password)
         self.make_call(reverse('team_membership_bulk_management', args=[self.good_course_id]), 400, method='post',
-                       data={'csv': csv_file},
-                       user='staff')
+                       data={'csv': csv_file}, user='staff')
 
-    @ddt.unpack
     def test_upload_assign_user_twice_to_same_teamset(self):
         csv_content = 'user,mode,topic_0' + '\n'
         csv_content += 'student_enrolled, masters, team wind power'
         csv_file = SimpleUploadedFile('test_file.csv', csv_content.encode('utf8'), content_type='text/csv')
         self.client.login(username=self.users['course_staff'].username, password=self.users['course_staff'].password)
         self.make_call(reverse('team_membership_bulk_management', args=[self.good_course_id]), 400, method='post',
-                       data={'csv': csv_file},
-                       user='staff')
+                       data={'csv': csv_file}, user='staff')
 
+    def test_upload_assign_one_user_to_different_teamsets(self):
+        self.create_and_enroll_student(username='a_user')
+        self.create_and_enroll_student(username='b_user')
+        self.create_and_enroll_student(username='c_user')
+        csv_content = 'user,mode,topic_0,topic_1,topic_2' + '\n'
+        csv_content += 'a_user, masters,team wind power,team 2' + '\n'
+        csv_content += 'b_user, masters,,team 2' + '\n'
+        csv_content += 'c_user, masters,,,team 3'
+        csv_file = SimpleUploadedFile('test_file.csv', csv_content.encode('utf8'), content_type='text/csv')
+        self.client.login(username=self.users['course_staff'].username, password=self.users['course_staff'].password)
+        self.make_call(reverse('team_membership_bulk_management', args=[self.good_course_id]), 201, method='post',
+                       data={'csv': csv_file}, user='staff')

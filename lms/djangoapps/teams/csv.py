@@ -136,25 +136,19 @@ class TeamMemberShipImportManager(object):
                     # teamsets
                     team = CourseTeam.objects.get(name=team_name, topic_id=self.teamset_index_dictionary[i])
                 except CourseTeam.DoesNotExist:
-                    # course_module = modulestore().get_course(course.id)
                     team = CourseTeam.create(name=team_name, course_id=course.id, description='Import from csv',
                                              topic_id=self.teamset_index_dictionary[i]
                                              )
                     team.save()
-
-                # if not has_team_api_access(request.user, team.course_id, access_username=username):
-                #     return Response(status=status.HTTP_404_NOT_FOUND)
-
                 # if not has_specific_team_access(request.user, team):
                 #    return Response(status=status.HTTP_403_FORBIDDEN)
-
-                # course_module = modulestore().get_course(course.id)
                 # This should use `calc_max_team_size` instead of `default_max_team_size` (TODO MST-32).
                 max_team_size = self.course_module.teams_configuration.default_max_team_size
                 if max_team_size is not None and team.users.count() >= max_team_size:
                     self.error_list.append('Team ' + team.team_id + ' is already full.')
                     break
                 try:
+                    team.add_user(self.user)
                     emit_team_event(
                         'edx.team.learner_added',
                         team.course_id,
@@ -184,6 +178,4 @@ class TeamMemberShipImportManager(object):
             self.user = User.objects.get(username=user_name)
         except User.DoesNotExist:
             self.user = User.objects.get(email=user_name)
-        except User.DoesNotExist:
             # TODO - handle user key case
-            self.error_list.append('User with username ' + user_name + ' does not exist')

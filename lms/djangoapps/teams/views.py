@@ -1393,7 +1393,6 @@ class MembershipBulkManagementView(ExpandableFieldViewMixin, GenericAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-
     def check_access(self):
         """
         Raises 403 if user does not have access to this endpoint.
