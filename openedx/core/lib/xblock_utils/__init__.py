@@ -414,7 +414,7 @@ def add_staff_markup(user, disable_staff_debug_info, block, view, frag, context)
     if isinstance(block, ScorableXBlockMixin):
         try:
             max_score = block.max_score()
-        except Exception as exc:  # pylint: disable=unused-variable
+        except Exception:  # pylint: disable=broad-except
             log.exception(u"Error getting the block {block} max score".format(block=block_id))
             max_score = 0
         staff_context['max_problem_score'] = max_score
