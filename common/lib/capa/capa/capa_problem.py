@@ -266,7 +266,7 @@ class LoncapaProblem(object):
                 optioninput.attrib.update({'options': options_string})
                 if correct_option:
                     if len(correct_option) > 1:
-                        raise responsetypes.LoncapaProblemError("Multiple Correct values not allowed")
+                        raise responsetypes.LoncapaProblemError(u"Dropdown questions can only have one correct answer.")
                     optioninput.attrib.update({'correct': correct_option[0]})
 
     def do_reset(self):
