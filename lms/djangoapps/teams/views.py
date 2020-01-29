@@ -55,7 +55,7 @@ from .api import (
     has_team_api_access,
     user_organization_protection_status
 )
-from .csv import load_team_membership_csv, TeamMemberShipImportManager
+from .csv import load_team_membership_csv, TeamMembershipImportManager
 from .errors import AlreadyOnTeamInCourse, ElasticSearchConnectionError, NotEnrolledInCourseForTeam
 from .search_indexes import CourseTeamIndexer
 from .serializers import (
@@ -1383,13 +1383,13 @@ class MembershipBulkManagementView(ExpandableFieldViewMixin, GenericAPIView):
         """
         self.check_access()
         inputfile_handle = request.FILES['csv']
-        team_import_manager = TeamMemberShipImportManager()
-        team_import_manager.set_team_membership_from_csv(self.course, inputfile_handle)
+        team_import_manager = TeamMembershipImportManager(self.course)
+        team_import_manager.set_team_membership_from_csv(inputfile_handle)
         if team_import_manager.import_succeeded is True:
             return Response(team_import_manager.number_of_record_added.__str__(), status=status.HTTP_201_CREATED)
         else:
             return Response(
-                build_api_error(':'.join([e for e in team_import_manager.error_list])),
+                build_api_error(':'.join([e for e in team_import_manager.validation_errors])),
                 status=status.HTTP_400_BAD_REQUEST
             )
 

@@ -30,28 +30,28 @@ def load_team_membership_csv(course, response):
     response.write(not_implemented_message + "\n")
 
 
-class TeamMemberShipImportManager(object):
+class TeamMembershipImportManager(object):
     """
     A manager class that is responsible the import process of csv file including validation and creation of
     team_courseteam and teams_courseteammembership objects.
     """
 
-    def __init__(self):
+    def __init__(self, course):
         # the list of validation errors
-        self.error_list = []
-        self.teamset_names_list = []
+        self.validation_errors = []
+        self.teamset_names = []
         # this is a dictionary of dictionaries that ensures that a student can belong to
         # one and only one team in a teamset
-        self.teamset_membership_dictionary = {}
+        self.user_ids_by_teamset_index = {}
         # dictionary that matches column index to a teamset name. Used when creating teams to get the right teamset
-        self.teamset_index_dictionary = {}
+        self.teamset_name_by_index = {}
         # the currently selected user
         self.user = ''
         self.number_of_record_added = 0
         # stores the course module that will be used to get course metadata
         self.course_module = ''
         # stores the course for which we are populating teams
-        self.course = ''
+        self.course = course
         self.max_erros = 0
         self.max_erros_found = False
 
@@ -60,9 +60,9 @@ class TeamMemberShipImportManager(object):
         """
         Helper wrapper that tells us the status of the import
         """
-        return len(self.error_list) == 0
+        return len(self.validation_errors) == 0
 
-    def set_team_membership_from_csv(self, course, input_file):
+    def set_team_membership_from_csv(self, input_file):
         """
         Assigns team membership based on the content of an uploaded CSV file.
         Returns true if there were no issues.
@@ -70,11 +70,7 @@ class TeamMemberShipImportManager(object):
         Arguments:
             course (CourseDescriptor): Course module for which team membership needs to be set.
         """
-        self.error_list = []
-        self.teamset_names_list = []
-        self.teamset_membership_dictionary = {}
-        self.course = course
-        self.course_module = modulestore().get_course(course.id)
+        self.course_module = modulestore().get_course(self.course.id)
         all_rows = [row for row in csv.reader(input_file.read().decode('utf-8').splitlines())]
         header_row = all_rows[0]
         if self.validate_teamsets(header_row):
@@ -85,7 +81,7 @@ class TeamMemberShipImportManager(object):
                     user = self.reset_user(row_data[0])
                     if user is None:
                         continue
-                    if self.validate_user_entry(user, course) is False:
+                    if self.validate_user_entry(user) is False:
                         row_data[0] = None
                         continue
 
@@ -94,9 +90,9 @@ class TeamMemberShipImportManager(object):
                     if self.validate_user_to_team(row_data) is False:
                         return False
 
-            if not self.error_list:
+            if not self.validation_errors:
                 for i in range(1, len(all_rows)):
-                    self.add_user_to_team(all_rows[i], course)
+                    self.add_user_to_team(all_rows[i])
                 return True
             else:
                 return False
@@ -114,15 +110,15 @@ class TeamMemberShipImportManager(object):
         for i in range(2, len(header_row)):
             team_config = self.course_module.teams_configuration
             if not header_row[i] in [ts.teamset_id for ts in team_config.teamsets]:
-                self.error_list.append("Teamset named " + header_row[i] + " does not exist.")
+                self.validation_errors.append("Teamset named " + header_row[i] + " does not exist.")
                 return False
-            self.teamset_names_list.append(header_row[i])
-            self.teamset_membership_dictionary[i] = [m.user_id for m in CourseTeamMembership.objects.filter
-                                                    (team__course_id=self.course.id, team__topic_id=header_row[i])]
-            self.teamset_index_dictionary[i] = header_row[i]
+            self.teamset_names.append(header_row[i])
+            self.user_ids_by_teamset_index[i] = {m.user_id for m in CourseTeamMembership.objects.filter
+                                        (team__course_id=self.course.id, team__topic_id=header_row[i])}
+            self.teamset_name_by_index[i] = header_row[i]
         return True
 
-    def validate_user_entry(self, user, course):
+    def validate_user_entry(self, user):
         """
         Invalid states:
             user not enrolled in course
@@ -133,8 +129,8 @@ class TeamMemberShipImportManager(object):
         andrew,masters,team1,,team3
         joe,masters,,team2,team3
         """
-        if not CourseEnrollment.is_enrolled(user, course.id):
-            self.error_list.append('User ' + user.username + ' is not enrolled in this course.')
+        if not CourseEnrollment.is_enrolled(user, self.course.id):
+            self.validation_errors.append('User ' + user.username + ' is not enrolled in this course.')
             return False
 
         return True
@@ -156,16 +152,16 @@ class TeamMemberShipImportManager(object):
                 try:
                     # checks for a team inside a specific team set. This way team names can be duplicated across
                     # teamsets
-                    team = CourseTeam.objects.get(name=team_name, topic_id=self.teamset_index_dictionary[i])
+                    team = CourseTeam.objects.get(name=team_name, topic_id=self.teamset_name_by_index[i])
                 except CourseTeam.DoesNotExist:
                     # if a team doesn't exists, the validation doesn't apply to it.
-                    if user.id in self.teamset_membership_dictionary[i]:
+                    if user.id in self.user_ids_by_teamset_index[i]:
                         if self.add_error_and_check_if_max_exceeded(
                             'User ' + user.id.__str__() + ' is already on a team set.'):
                             return False
                     else:
-                        self.teamset_membership_dictionary[i].append(user.id)
-                    continue
+                        self.user_ids_by_teamset_index[i].add(user.id)
+                        continue
                 max_team_size = self.course_module.teams_configuration.default_max_team_size
                 if max_team_size is not None and team.users.count() >= max_team_size:
                     if self.add_error_and_check_if_max_exceeded('Team ' + team.team_id + ' is already full.'):
@@ -184,14 +180,14 @@ class TeamMemberShipImportManager(object):
         :return: True if maximum error threshold is exceeded and processing must stop
                  False if maximum error threshold is NOT exceeded and processing can continue
         """
-        self.error_list.append(error_message)
-        if len(self.error_list) >= self.max_erros:
+        self.validation_errors.append(error_message)
+        if len(self.validation_errors) >= self.max_erros:
             self.max_erros_found = True
             return True
         else:
             return False
 
-    def add_user_to_team(self, user_row, course):
+    def add_user_to_team(self, user_row):
         """
         Creates a CourseTeamMembership entry - i.e: a relationship between a user and a team.
         user_row is the list representation of an input row. It will have the following formta:
@@ -207,10 +203,10 @@ class TeamMemberShipImportManager(object):
                 try:
                     # checks for a team inside a specific team set. This way team names can be duplicated across
                     # teamsets
-                    team = CourseTeam.objects.get(name=team_name, topic_id=self.teamset_index_dictionary[i])
+                    team = CourseTeam.objects.get(name=team_name, topic_id=self.teamset_name_by_index[i])
                 except CourseTeam.DoesNotExist:
-                    team = CourseTeam.create(name=team_name, course_id=course.id, description='Import from csv',
-                                             topic_id=self.teamset_index_dictionary[i]
+                    team = CourseTeam.create(name=team_name, course_id=self.course.id, description='Import from csv',
+                                             topic_id=self.teamset_name_by_index[i]
                                              )
                     team.save()
                 try:
@@ -244,6 +240,6 @@ class TeamMemberShipImportManager(object):
             try:
                 return User.objects.get(email=user_name)
             except User.DoesNotExist:
-                self.error_list.append('Username or email ' + user_name + ' does not exist.')
+                self.validation_errors.append('Username or email ' + user_name + ' does not exist.')
                 return None
                 # TODO - handle user key case
