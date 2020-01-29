@@ -171,7 +171,7 @@ class CourseEntitlement(TimeStampedModel):
         blank=True,
         on_delete=models.CASCADE,
     )
-    order_number = models.CharField(max_length=128, null=True, blank=True)
+    order_number = models.CharField(max_length=128, default=None, null=True)
     refund_locked = models.BooleanField(default=False)
     _policy = models.ForeignKey(CourseEntitlementPolicy, null=True, blank=True, on_delete=models.CASCADE)
 
