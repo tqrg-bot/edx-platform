@@ -114,7 +114,7 @@ class TeamMembershipImportManager(object):
                 return False
             self.teamset_names.append(header_row[i])
             self.user_ids_by_teamset_index[i] = {m.user_id for m in CourseTeamMembership.objects.filter
-                                        (team__course_id=self.course.id, team__topic_id=header_row[i])}
+                                                 (team__course_id=self.course.id, team__topic_id=header_row[i])}
             self.teamset_name_by_index[i] = header_row[i]
         return True
 
@@ -156,8 +156,7 @@ class TeamMembershipImportManager(object):
                 except CourseTeam.DoesNotExist:
                     # if a team doesn't exists, the validation doesn't apply to it.
                     if user.id in self.user_ids_by_teamset_index[i]:
-                        if self.add_error_and_check_if_max_exceeded(
-                            'User ' + user.id.__str__() + ' is already on a team set.'):
+                        if self.add_error_and_check_if_max_exceeded('User ' + user.id.__str__() + ' is already on a team set.'):
                             return False
                     else:
                         self.user_ids_by_teamset_index[i].add(user.id)
