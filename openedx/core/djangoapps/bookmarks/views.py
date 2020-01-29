@@ -36,7 +36,7 @@ from .serializers import BookmarkSerializer
 log = logging.getLogger(__name__)
 
 temp_authentication_classes = (OAuth2AuthenticationDeprecated, SessionAuthentication)
-if "use_new_oauth2_authentication_class" in settings.keys() and settings["use_new_oauth2_authentication_class"]:
+if "BOOKMARKS_USE_NEW_OAUTH2_CLASS" in settings.keys() and settings["use_new_oauth2_authentication_class"]:
     temp_authentication_classes = (OAuth2Authentication, SessionAuthentication)
 
 # Default error message for user

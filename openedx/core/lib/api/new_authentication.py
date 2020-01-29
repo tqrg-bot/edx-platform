@@ -39,7 +39,7 @@ class OAuth2Authentication(BaseAuthentication):
         token.
         """
 
-        set_custom_metric("OAuth2AuthenticationCalled", True)
+        set_custom_metric("NewOAuth2AuthenticationCalled", True)
         auth = get_authorization_header(request).split()
 
         if len(auth) == 1:
@@ -66,7 +66,7 @@ class OAuth2Authentication(BaseAuthentication):
                 msg = 'User inactive or deleted: %s' % user.get_username()
                 raise AuthenticationFailed(msg)
 
-        set_custom_metric("OAuth2AuthenticationSuccess", True)
+        set_custom_metric("NewOAuth2AuthenticationSuccess", True)
 
         return user, token
 
