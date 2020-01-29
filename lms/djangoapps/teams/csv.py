@@ -60,7 +60,7 @@ class TeamMembershipImportManager(object):
         """
         Helper wrapper that tells us the status of the import
         """
-        return len(self.validation_errors) == 0
+        return not self.validation_errors
 
     def set_team_membership_from_csv(self, input_file):
         """
@@ -77,18 +77,21 @@ class TeamMembershipImportManager(object):
             # process student rows:
             for i in range(1, len(all_rows)):
                 row_data = all_rows[i]
-                if row_data[0]:  # avoid processing rows with empty user names (excel copy and paste)
-                    user = self.reset_user(row_data[0])
-                    if user is None:
-                        continue
-                    if self.validate_user_entry(user) is False:
-                        row_data[0] = None
-                        continue
+                username = row_data[0]
+                if not username:
+                    continue
+                #if row_data[0]:  # avoid processing rows with empty user names (excel copy and paste)
+                user = self.get_user(username)
+                if user is None:
+                    continue
+                if self.validate_user_entry(user) is False:
+                    row_data[0] = None
+                    continue
 
-                    row_data[0] = user
+                row_data[0] = user
 
-                    if self.validate_user_to_team(row_data) is False:
-                        return False
+                if self.validate_user_to_team(row_data) is False:
+                    return False
 
             if not self.validation_errors:
                 for i in range(1, len(all_rows)):
@@ -101,15 +104,17 @@ class TeamMembershipImportManager(object):
     def validate_teamsets(self, header_row):
         """
         Validates team set names. Returns true if there are no errors.
+        The following conditions result in errors:
+        Teamset does not exist
         Also populates teh teamset_names_list.
         header_row is the list representation of the header row of the input file. It will have
         the following format:
         user, mode, <teamset_1_name>,...,<teamset_n_name>
         where teamset_X_name must be a valid name of an existing teamset.
         """
+        teamset_ids = {ts.teamset_id for ts in self.course_module.teams_configuration.teamsets}
         for i in range(2, len(header_row)):
-            team_config = self.course_module.teams_configuration
-            if not header_row[i] in [ts.teamset_id for ts in team_config.teamsets]:
+            if not header_row[i] in teamset_ids:
                 self.validation_errors.append("Teamset named " + header_row[i] + " does not exist.")
                 return False
             self.teamset_names.append(header_row[i])
@@ -204,9 +209,12 @@ class TeamMembershipImportManager(object):
                     # teamsets
                     team = CourseTeam.objects.get(name=team_name, topic_id=self.teamset_name_by_index[i])
                 except CourseTeam.DoesNotExist:
-                    team = CourseTeam.create(name=team_name, course_id=self.course.id, description='Import from csv',
-                                             topic_id=self.teamset_name_by_index[i]
-                                             )
+                    team = CourseTeam.create(
+                        name=team_name,
+                        course_id=self.course.id,
+                        description='Import from csv',
+                        topic_id=self.teamset_name_by_index[i]
+                    )
                     team.save()
                 try:
                     team.add_user(user)
@@ -227,7 +235,7 @@ class TeamMembershipImportManager(object):
                         return False
                 self.number_of_record_added += 1
 
-    def reset_user(self, user_name):
+    def get_user(self, user_name):
         """
         Resets the class user object variable from the provided username/email/user locator.
         If a matching user is not found, throws exception and stops processing.
