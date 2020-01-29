@@ -8,7 +8,7 @@ from student.models import CourseEnrollment
 from xmodule.modulestore.django import modulestore
 
 from lms.djangoapps.teams.models import CourseTeam, CourseTeamMembership
-from .errors import AlreadyOnTeamInCourse, NotEnrolledInCourseForTeam
+from .errors import AlreadyOnTeamInCourse
 from .utils import emit_team_event
 
 
@@ -91,10 +91,10 @@ class TeamMemberShipImportManager(object):
 
                     row_data[0] = user
 
-                    if self.validate_user_to_team(row_data, course) is False:
+                    if self.validate_user_to_team(row_data) is False:
                         return False
 
-            if len(self.error_list) == 0:
+            if not self.error_list:
                 for i in range(1, len(all_rows)):
                     self.add_user_to_team(all_rows[i], course)
                 return True
@@ -117,7 +117,8 @@ class TeamMemberShipImportManager(object):
                 self.error_list.append("Teamset named " + header_row[i] + " does not exist.")
                 return False
             self.teamset_names_list.append(header_row[i])
-            self.teamset_membership_dictionary[i] = []
+            self.teamset_membership_dictionary[i] = [m.user_id for m in CourseTeamMembership.objects.filter
+                                                    (team__course_id=self.course.id, team__topic_id=header_row[i])]
             self.teamset_index_dictionary[i] = header_row[i]
         return True
 
@@ -138,7 +139,7 @@ class TeamMemberShipImportManager(object):
 
         return True
 
-    def validate_user_to_team(self, user_row, course):
+    def validate_user_to_team(self, user_row):
         """
         Validates a user entry relative to an existing team.
         user_row is the list representation of an input row. It will have the following formta:
@@ -158,21 +159,20 @@ class TeamMemberShipImportManager(object):
                     team = CourseTeam.objects.get(name=team_name, topic_id=self.teamset_index_dictionary[i])
                 except CourseTeam.DoesNotExist:
                     # if a team doesn't exists, the validation doesn't apply to it.
-                    import pdb;pdb.set_trace()
                     if user.id in self.teamset_membership_dictionary[i]:
-                        if self.add_error_and_check_if_max_exceeded.append(
-                            'User ' + user.id + ' is already on a team set.'):
+                        if self.add_error_and_check_if_max_exceeded(
+                            'User ' + user.id.__str__() + ' is already on a team set.'):
                             return False
                     else:
                         self.teamset_membership_dictionary[i].append(user.id)
                     continue
                 max_team_size = self.course_module.teams_configuration.default_max_team_size
                 if max_team_size is not None and team.users.count() >= max_team_size:
-                    if self.add_error_and_check_if_max_exceeded.append('Team ' + team.team_id + ' is already full.'):
+                    if self.add_error_and_check_if_max_exceeded('Team ' + team.team_id + ' is already full.'):
                         return False
-                if CourseTeamMembership.user_in_team_for_course( user, self.course.id, team.topic_id):
+                if CourseTeamMembership.user_in_team_for_course(user, self.course.id, team.topic_id):
                     if self.add_error_and_check_if_max_exceeded(
-                        'The user ' + self.user.username + ' is already a member of a team inside teamset '
+                        'The user ' + user.username + ' is already a member of a team inside teamset '
                         + team.topic_id + ' in this course.'
                     ):
                         return False
@@ -185,7 +185,7 @@ class TeamMemberShipImportManager(object):
                  False if maximum error threshold is NOT exceeded and processing can continue
         """
         self.error_list.append(error_message)
-        if count(self.error_list) >= self.max_erros:
+        if len(self.error_list) >= self.max_erros:
             self.max_erros_found = True
             return True
         else:
@@ -225,9 +225,11 @@ class TeamMemberShipImportManager(object):
                         }
                     )
                 except AlreadyOnTeamInCourse:
-                    import pdb;pdb.set_trace()
-                    e = 'bad'
-                    throw
+                    if self.add_error_and_check_if_max_exceeded(
+                        'The user ' + user.username + ' is already a member of a team inside teamset '
+                        + team.topic_id + ' in this course.'
+                    ):
+                        return False
                 self.number_of_record_added += 1
 
     def reset_user(self, user_name):
