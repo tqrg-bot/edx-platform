@@ -52,8 +52,7 @@ class TeamMembershipImportManager(object):
         self.course_module = ''
         # stores the course for which we are populating teams
         self.course = course
-        self.max_erros = 0
-        self.max_erros_found = False
+        self.max_errors = 0
 
     @property
     def import_succeeded(self):
@@ -84,7 +83,7 @@ class TeamMembershipImportManager(object):
                 user = self.get_user(username)
                 if user is None:
                     continue
-                if self.validate_user_entry(user) is False:
+                if self.validate_user_enrolled_in_course(user) is False:
                     row_data[0] = None
                     continue
 
@@ -123,7 +122,7 @@ class TeamMembershipImportManager(object):
             self.teamset_name_by_index[i] = header_row[i]
         return True
 
-    def validate_user_entry(self, user):
+    def validate_user_enrolled_in_course(self, user):
         """
         Invalid states:
             user not enrolled in course
@@ -153,29 +152,31 @@ class TeamMembershipImportManager(object):
         for i in range(2, len(user_row)):
             user = user_row[0]
             team_name = user_row[i]
-            if team_name:
-                try:
-                    # checks for a team inside a specific team set. This way team names can be duplicated across
-                    # teamsets
-                    team = CourseTeam.objects.get(name=team_name, topic_id=self.teamset_name_by_index[i])
-                except CourseTeam.DoesNotExist:
-                    # if a team doesn't exists, the validation doesn't apply to it.
-                    if user.id in self.user_ids_by_teamset_index[i] and self.add_error_and_check_if_max_exceeded(
-                            'User ' + user.id.__str__() + ' is already on a team set.'):
-                        return False
-                    else:
-                        self.user_ids_by_teamset_index[i].add(user.id)
-                        continue
-                max_team_size = self.course_module.teams_configuration.default_max_team_size
-                if max_team_size is not None and team.users.count() >= max_team_size:
-                    if self.add_error_and_check_if_max_exceeded('Team ' + team.team_id + ' is already full.'):
-                        return False
-                if CourseTeamMembership.user_in_team_for_course(user, self.course.id, team.topic_id):
-                    if self.add_error_and_check_if_max_exceeded(
-                        'The user ' + user.username + ' is already a member of a team inside teamset '
-                        + team.topic_id + ' in this course.'
-                    ):
-                        return False
+            if not team_name:
+                continue
+            try:
+                # checks for a team inside a specific team set. This way team names can be duplicated across
+                # teamsets
+                team = CourseTeam.objects.get(name=team_name, topic_id=self.teamset_name_by_index[i])
+            except CourseTeam.DoesNotExist:
+                # if a team doesn't exists, the validation doesn't apply to it.
+                all_teamset_user_ids = self.user_ids_by_teamset_index[i]
+                error_message = 'User {} is already on a teamset'.format(user)
+                if user.id in all_teamset_user_ids and self.add_error_and_check_if_max_exceeded(error_message):
+                    return False
+                else:
+                    self.user_ids_by_teamset_index[i].add(user.id)
+                    continue
+            max_team_size = self.course_module.teams_configuration.default_max_team_size
+            if max_team_size is not None and team.users.count() >= max_team_size:
+                if self.add_error_and_check_if_max_exceeded('Team ' + team.team_id + ' is already full.'):
+                    return False
+            if CourseTeamMembership.user_in_team_for_course(user, self.course.id, team.topic_id):
+                error_message = 'The user {0} is already a member of a team inside teamset {1} in this course.'.format(
+                    user.username, team.topic_id
+                )
+                if self.add_error_and_check_if_max_exceeded(error_message):
+                    return False
 
     def add_error_and_check_if_max_exceeded(self, error_message):
         """
@@ -185,11 +186,7 @@ class TeamMembershipImportManager(object):
                  False if maximum error threshold is NOT exceeded and processing can continue
         """
         self.validation_errors.append(error_message)
-        if len(self.validation_errors) >= self.max_erros:
-            self.max_erros_found = True
-            return True
-        else:
-            return False
+        return len(self.validation_errors) >= self.max_errors
 
     def add_user_to_team(self, user_row):
         """
