@@ -245,6 +245,23 @@ class LoncapaProblem(object):
         This translation takes in the new format and synthesizes the old option= attribute
         so all downstream logic works unchanged with the new <option> tag format.
         """
+        def is_optioninput_valid(optioninput):
+            """
+            Verifies if a given optioninput xml is valid or not.
+
+            A given optioninput(Dropdown) problem is invalid if it has more than one correct answer.
+
+            Argument:
+                optioninput: dropdown specification tree
+            Returns:
+                boolean: signifying if the optioninput is valid or not.
+            """
+            correct_options = [
+                option.get('correct').upper() == 'TRUE' for option in optioninput.findall('./option')
+            ]
+            if correct_options.count(True) > 1:
+                return False
+            return True
         additionals = tree.xpath('//stringresponse/additional_answer')
         for additional in additionals:
             answer = additional.get('answer')
@@ -253,21 +270,21 @@ class LoncapaProblem(object):
                 additional.set('answer', text)
                 additional.text = ''
         for optioninput in tree.xpath('//optioninput'):
-            correct_option = []
+            if not is_optioninput_valid(optioninput):
+                raise responsetypes.LoncapaProblemError(u"Dropdown questions can only have one correct answer.")
+            correct_option = None
             child_options = []
             for option_element in optioninput.findall('./option'):
                 option_name = option_element.text.strip()
                 if option_element.get('correct').upper() == 'TRUE':
-                    correct_option.append(option_name)
+                    correct_option = option_name
                 child_options.append("'" + option_name + "'")
 
             if len(child_options) > 0:
                 options_string = '(' + ','.join(child_options) + ')'
                 optioninput.attrib.update({'options': options_string})
                 if correct_option:
-                    if len(correct_option) > 1:
-                        raise responsetypes.LoncapaProblemError(u"Dropdown questions can only have one correct answer.")
-                    optioninput.attrib.update({'correct': correct_option[0]})
+                    optioninput.attrib.update({'correct': correct_option})
 
     def do_reset(self):
         """
